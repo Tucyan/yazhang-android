@@ -1,0 +1,385 @@
+package com.example.yazhang.ai.config;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.security.keystore.KeyGenParameterSpec;
+import android.security.keystore.KeyProperties;
+import android.util.Base64;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.nio.charset.StandardCharsets;
+import java.security.KeyStore;
+import java.util.UUID;
+
+import javax.crypto.Cipher;
+import javax.crypto.KeyGenerator;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.GCMParameterSpec;
+
+/** Provider metadata is portable; API credentials are device-bound and never in backups. */
+public final class SecureSettings {
+
+    private static final String ALIAS = "yazhang.api.v1";
+    private static final String PROVIDERS = "providers";
+    private static final String ACTIVE = "active_provider_id";
+    private final SharedPreferences preferences;
+
+    public SecureSettings(Context context) {
+        preferences = context.getSharedPreferences("provider_private", Context.MODE_PRIVATE);
+    }
+
+    public synchronized JSONArray getProviders() {
+        migrateLegacy();
+        String raw = preferences.getString(PROVIDERS, null);
+        if (raw == null) {
+            return ProviderProfiles.defaults();
+        }
+        try {
+            JSONArray parsed = new JSONArray(raw);
+            JSONArray safe = new JSONArray();
+            for (int i = 0; i < parsed.length(); i++) {
+                JSONObject item = parsed.getJSONObject(i);
+                safe.put(ProviderProfiles.sanitize(item, item.optBoolean("is_custom", false)));
+            }
+            return safe;
+        } catch (Exception error) {
+            throw new IllegalStateException("模型设置损坏，请重新配置", error);
+        }
+    }
+
+    public synchronized JSONObject getProvider() {
+        JSONArray providers = getProviders();
+        String selected = preferences.getString(ACTIVE, "tokendance");
+        for (int i = 0; i < providers.length(); i++) {
+            JSONObject provider = providers.optJSONObject(i);
+            if (provider != null && selected.equals(provider.optString("id"))) {
+                return copy(provider);
+            }
+        }
+        JSONObject first = providers.optJSONObject(0);
+        if (first == null) {
+            throw new IllegalStateException("没有可用的模型配置");
+        }
+        selectProvider(first.optString("id"));
+        return copy(first);
+    }
+
+    public synchronized void selectProvider(String id) {
+        JSONArray providers = getProviders();
+        for (int i = 0; i < providers.length(); i++) {
+            JSONObject provider = providers.optJSONObject(i);
+            if (provider != null && id.equals(provider.optString("id"))) {
+                if (!preferences.edit().putString(ACTIVE, id).commit()) {
+                    throw new IllegalStateException("无法切换模型配置");
+                }
+                return;
+            }
+        }
+        throw new IllegalArgumentException("找不到模型配置");
+    }
+
+    public synchronized String addProvider(JSONObject config, String apiKey) throws Exception {
+        JSONObject input = copy(config);
+        String id = input.optString("id", "").trim();
+        if (id.isEmpty()) {
+            id = "custom_" + UUID.randomUUID();
+        }
+        input.put("id", id);
+        JSONObject safe = ProviderProfiles.sanitize(input, true);
+        JSONArray all = getProviders();
+        boolean replaced = false;
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < all.length(); i++) {
+            JSONObject existing = all.getJSONObject(i);
+            if (id.equals(existing.optString("id"))) {
+                if (!existing.optBoolean("is_custom", false)) {
+                    throw new IllegalArgumentException("预设服务商不能作为自定义配置更新");
+                }
+                requireKeyForDestinationChange(existing, safe, id, apiKey);
+                next.put(safe);
+                replaced = true;
+            } else {
+                next.put(existing);
+            }
+        }
+        if (!replaced) {
+            next.put(safe);
+        }
+        SharedPreferences.Editor editor = preferences.edit().putString(PROVIDERS, next.toString());
+        if (apiKey != null) {
+            putKey(editor, id, apiKey);
+        }
+        if (!editor.commit()) {
+            throw new IllegalStateException("无法保存模型设置，请检查存储空间");
+        }
+        return id;
+    }
+
+    public synchronized void deleteProvider(String id) {
+        JSONArray all = getProviders();
+        JSONArray next = new JSONArray();
+        boolean found = false;
+        for (int i = 0; i < all.length(); i++) {
+            JSONObject provider = all.optJSONObject(i);
+            if (provider != null && id.equals(provider.optString("id"))) {
+                if (!provider.optBoolean("is_custom", false)) {
+                    throw new IllegalArgumentException("预设服务商不能删除");
+                }
+                found = true;
+            } else if (provider != null) {
+                next.put(provider);
+            }
+        }
+        if (!found) {
+            throw new IllegalArgumentException("找不到自定义模型配置");
+        }
+        if (next.length() == 0) {
+            throw new IllegalStateException("至少保留一个模型配置");
+        }
+        SharedPreferences.Editor editor = preferences.edit()
+                .putString(PROVIDERS, next.toString())
+                .remove(keyName(id))
+                .remove(ivName(id));
+        if (id.equals(preferences.getString(ACTIVE, "tokendance"))) {
+            editor.putString(ACTIVE, next.optJSONObject(0).optString("id"));
+        }
+        if (!editor.commit()) {
+            throw new IllegalStateException("无法删除模型配置");
+        }
+    }
+
+    public synchronized void saveProvider(JSONObject provider, String apiKey) throws Exception {
+        JSONArray current = getProviders();
+        String id = provider.optString("id", preferences.getString(ACTIVE, "tokendance"));
+        if (id.trim().isEmpty()) {
+            id = preferences.getString(ACTIVE, "tokendance");
+        }
+        JSONObject supplied = copy(provider).put("id", id);
+        boolean custom = false;
+        boolean found = false;
+        JSONObject existing = null;
+        for (int i = 0; i < current.length(); i++) {
+            if (id.equals(current.getJSONObject(i).optString("id"))) {
+                existing = current.getJSONObject(i);
+                custom = existing.optBoolean("is_custom", false);
+                found = true;
+            }
+        }
+        if (!found || existing == null) {
+            throw new IllegalArgumentException("找不到模型配置");
+        }
+        JSONObject input = copy(existing);
+        if ((supplied.has("model_id")
+                && !supplied.optString("model_id").equals(existing.optString("model_id")))
+                || (supplied.has("base_url")
+                && !ProviderProfiles.destinationKey(supplied.optString("base_url"))
+                        .equals(ProviderProfiles.destinationKey(existing.optString("base_url"))))) {
+            input.remove("reasoning_levels");
+            input.remove("vision_known");
+        }
+        for (String field : new String[] {
+                "name", "base_url", "model_id", "supports_vision", "reasoning_effort",
+                "reasoning_levels", "vision_known", "is_custom_model_id", "is_custom_base_url"
+        }) {
+            if (supplied.has(field)) {
+                input.put(field, supplied.get(field));
+            }
+        }
+        input.put("id", id);
+        JSONObject safe = ProviderProfiles.sanitize(input, custom);
+        requireKeyForDestinationChange(existing, safe, id, apiKey);
+        JSONArray next = new JSONArray();
+        for (int i = 0; i < current.length(); i++) {
+            JSONObject currentProvider = current.getJSONObject(i);
+            next.put(id.equals(currentProvider.optString("id")) ? safe : currentProvider);
+        }
+        SharedPreferences.Editor editor = preferences.edit().putString(PROVIDERS, next.toString());
+        if (apiKey != null) {
+            putKey(editor, id, apiKey);
+        }
+        if (!editor.commit()) {
+            throw new IllegalStateException("无法保存模型设置，请检查存储空间");
+        }
+    }
+
+    public synchronized String getApiKey(String id) throws Exception {
+        migrateLegacy();
+        return readKey(id);
+    }
+
+    public synchronized String getApiKey() throws Exception {
+        return getApiKey(getProvider().optString("id"));
+    }
+
+    /** A draft can reuse a credential only when both identity and destination still match. */
+    public synchronized String getApiKeyFor(JSONObject draft, String enteredKey) throws Exception {
+        if (enteredKey != null && !enteredKey.trim().isEmpty()) {
+            return enteredKey.trim();
+        }
+        JSONObject active = getProvider();
+        String id = draft.optString("id", "");
+        if (!id.equals(active.optString("id"))) {
+            return "";
+        }
+        try {
+            if (!ProviderProfiles.destinationKey(draft.optString("base_url"))
+                    .equals(ProviderProfiles.destinationKey(active.optString("base_url")))) {
+                return "";
+            }
+        } catch (RuntimeException invalid) {
+            return "";
+        }
+        return readKey(id);
+    }
+
+    private void migrateLegacy() {
+        if (preferences.contains(PROVIDERS)) {
+            return;
+        }
+        if (!preferences.contains("provider")
+                && !preferences.contains("key")
+                && !preferences.contains("iv")) {
+            return;
+        }
+        try {
+            JSONObject legacy = new JSONObject(preferences.getString("provider", "{}"));
+            if (!legacy.has("base_url")) {
+                legacy.put("base_url", "https://api.openai.com/v1");
+            }
+            if (!legacy.has("model_id")) {
+                legacy.put("model_id", "gpt-4o-mini");
+            }
+            if (legacy.optString("name").trim().isEmpty()) {
+                legacy.put("name", "兼容服务（已迁移）");
+            }
+            if (!legacy.has("supports_vision")) {
+                legacy.put("supports_vision", true);
+            }
+            String id = legacy.optString("id", "").trim();
+            if (id.isEmpty()) {
+                String base = legacy.optString("base_url", "https://api.openai.com/v1");
+                String model = legacy.optString("model_id", "gpt-4o-mini");
+                id = null;
+                JSONArray defaults = ProviderProfiles.defaults();
+                for (int i = 0; i < defaults.length(); i++) {
+                    JSONObject presetProfile = defaults.getJSONObject(i);
+                    if (ProviderProfiles.destinationKey(base)
+                            .equals(ProviderProfiles.destinationKey(
+                                    presetProfile.optString("base_url")))
+                            && model.equals(presetProfile.optString("model_id"))) {
+                        id = presetProfile.optString("id");
+                        break;
+                    }
+                }
+                if (id == null) {
+                    id = "legacy_" + UUID.randomUUID();
+                }
+            }
+            legacy.put("id", id);
+            boolean custom = legacy.optBoolean("is_custom", !isPreset(id));
+            JSONObject safe = ProviderProfiles.sanitize(legacy, custom);
+            JSONArray all = ProviderProfiles.defaults();
+            boolean matched = false;
+            for (int i = 0; i < all.length(); i++) {
+                if (id.equals(all.getJSONObject(i).optString("id"))) {
+                    all.put(i, safe);
+                    matched = true;
+                }
+            }
+            if (!matched) {
+                all.put(safe);
+            }
+            SharedPreferences.Editor editor = preferences.edit()
+                    .putString(PROVIDERS, all.toString())
+                    .putString(ACTIVE, id);
+            String oldCipher = preferences.getString("key", null);
+            String oldIv = preferences.getString("iv", null);
+            if (oldCipher != null && oldIv != null) {
+                editor.putString(keyName(id), oldCipher).putString(ivName(id), oldIv);
+            }
+            editor.remove("provider").remove("key").remove("iv");
+            if (!editor.commit()) {
+                throw new IllegalStateException("无法迁移模型设置，请重试");
+            }
+        } catch (Exception error) {
+            throw new IllegalStateException("迁移模型设置失败", error);
+        }
+    }
+
+    private boolean isPreset(String id) {
+        return ProviderProfiles.preset(id) != null;
+    }
+
+    private String readKey(String id) throws Exception {
+        String stored = preferences.getString(keyName(id), null);
+        if (stored == null) {
+            return "";
+        }
+        try {
+            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+            cipher.init(Cipher.DECRYPT_MODE, key(), new GCMParameterSpec(
+                    128, Base64.decode(preferences.getString(ivName(id), ""), Base64.NO_WRAP)));
+            return new String(
+                    cipher.doFinal(Base64.decode(stored, Base64.NO_WRAP)),
+                    StandardCharsets.UTF_8);
+        } catch (Exception error) {
+            throw new IllegalStateException("本机密钥无法解密，请在设置中重新填写 API Key", error);
+        }
+    }
+
+    private void putKey(SharedPreferences.Editor editor, String id, String value) throws Exception {
+        if (value.trim().isEmpty()) {
+            editor.remove(keyName(id)).remove(ivName(id));
+            return;
+        }
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, key());
+        editor.putString(keyName(id), Base64.encodeToString(
+                cipher.doFinal(value.trim().getBytes(StandardCharsets.UTF_8)), Base64.NO_WRAP));
+        editor.putString(ivName(id), Base64.encodeToString(cipher.getIV(), Base64.NO_WRAP));
+    }
+
+    private String keyName(String id) {
+        return "key_" + id;
+    }
+
+    private String ivName(String id) {
+        return "iv_" + id;
+    }
+
+    private void requireKeyForDestinationChange(
+            JSONObject previous, JSONObject next, String id, String apiKey) {
+        if (apiKey == null
+                && preferences.contains(keyName(id))
+                && !ProviderProfiles.destinationKey(previous.optString("base_url"))
+                        .equals(ProviderProfiles.destinationKey(next.optString("base_url")))) {
+            throw new IllegalArgumentException("服务地址已更改，请重新填写 API Key 或清空密钥");
+        }
+    }
+
+    private JSONObject copy(JSONObject source) {
+        try {
+            return new JSONObject(source.toString());
+        } catch (org.json.JSONException error) {
+            throw new IllegalStateException("模型配置无效", error);
+        }
+    }
+
+    private SecretKey key() throws Exception {
+        KeyStore store = KeyStore.getInstance("AndroidKeyStore");
+        store.load(null);
+        if (store.containsAlias(ALIAS)) {
+            return (SecretKey) store.getKey(ALIAS, null);
+        }
+        KeyGenerator generator =
+                KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore");
+        generator.init(new KeyGenParameterSpec.Builder(
+                ALIAS, KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
+                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+                .build());
+        return generator.generateKey();
+    }
+}

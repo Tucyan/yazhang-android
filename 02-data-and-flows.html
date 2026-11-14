@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>芽账 · 本地数据结构与业务流程</title>
+  <style>
+    :root{--ink:#17372e;--muted:#6d7c74;--green:#174b3b;--green2:#2d6a51;--lime:#ddef9f;--cream:#f5f6ef;--line:#e1e7dc;--red:#b9574d;--shadow:0 18px 50px rgba(30,58,46,.08)}
+    *{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font-family:Inter,"PingFang SC","Microsoft YaHei",sans-serif;line-height:1.6}
+    .container{max-width:1180px;margin:auto;padding:0 26px}
+    .topbar{height:70px;background:rgba(255,255,255,.9);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20;backdrop-filter:blur(12px)}
+    .topbar-inner{height:100%;display:flex;align-items:center;justify-content:space-between}
+    .brand{display:flex;align-items:center;gap:11px;font-size:19px;font-weight:800}.brand-mark{width:36px;height:36px;border-radius:12px;background:var(--green);display:grid;place-items:center;color:var(--lime)}.brand small{display:block;font-size:9px;letter-spacing:.16em;color:var(--muted)}
+    .back-link{text-decoration:none;font-size:11px;font-weight:800;background:var(--green);color:white;padding:10px 13px;border-radius:11px}
+    .hero{padding:52px 0 30px;display:grid;grid-template-columns:1.4fr .6fr;gap:36px;align-items:end}
+    .eyebrow{font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--green2);font-weight:800;margin-bottom:13px}
+    .hero h1{font-size:40px;line-height:1.2;letter-spacing:-.05em;margin:0 0 16px}
+    .hero p{font-size:13px;color:var(--muted);margin:0;max-width:720px}
+    .hero-badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:20px}.badge{font-size:10px;font-weight:700;background:#e6ecdf;color:#466051;padding:7px 10px;border-radius:10px}
+    .hero-note{background:var(--green);color:white;border-radius:22px;padding:21px}.hero-note b{font-size:13px}.hero-note p{color:#c5d6cc;font-size:11px;margin:9px 0 0}.hero-note .local{color:var(--lime)}
+    .section{padding:22px 0 40px}.section-head{display:flex;align-items:end;justify-content:space-between;margin-bottom:18px}.section-head h2{font-size:26px;letter-spacing:-.035em;margin:0}.section-head p{font-size:11px;color:var(--muted);margin:7px 0 0}.section-no{font-size:11px;font-weight:800;color:#93a197;letter-spacing:.14em}
+    .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}.card{background:white;border:1px solid var(--line);border-radius:16px;padding:17px}.card h3{font-size:12px;margin:0 0 7px}.card p{font-size:10px;color:var(--muted);margin:0}.card code{font-family:Consolas,monospace;font-size:9px;color:#4e6757;background:#eef2e9;padding:2px 4px;border-radius:4px}
+    .arch{margin-top:16px;background:#193e33;border-radius:24px;padding:26px;color:white}.arch-head h3{font-size:18px;margin:0}.arch-head p{font-size:10px;color:#b9cec3;margin:7px 0 20px}
+    .arch-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:20px}.layer-label{font-size:9px;letter-spacing:.13em;color:var(--lime);font-weight:800;margin-bottom:9px}.arch-box{background:rgba(255,255,255,.075);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:11px 12px;margin-bottom:7px}.arch-box b{display:block;font-size:11px;margin-bottom:4px}.arch-box span{font-size:9px;color:#bdd0c5}.arch-box.accent{background:var(--lime);color:var(--ink);border-color:var(--lime)}.arch-box.accent span{color:#50613d}
+    .model{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.entity{background:white;border:1px solid var(--line);border-radius:17px;overflow:hidden}.entity h3{font-family:Consolas,monospace;font-size:12px;margin:0;padding:13px 15px;background:#eaf0e2;color:#315640;border-bottom:1px solid var(--line)}.entity ul{list-style:none;margin:0;padding:12px 15px}.entity li{font-size:10px;color:var(--muted);padding:4px 0;border-bottom:1px dashed #edf0e9}.entity li:last-child{border:0}.entity li b{font-family:Consolas,monospace;color:#285341}
+    .flow-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}.flow{background:white;border:1px solid var(--line);border-radius:17px;padding:18px}.flow h3{font-size:13px;margin:0 0 4px}.flow .sub{font-size:9px;color:var(--muted);margin-bottom:12px}.step{display:grid;grid-template-columns:24px 1fr;gap:9px;padding:7px 0}.step-no{width:24px;height:24px;border-radius:8px;background:#eaf0e2;color:var(--green);display:grid;place-items:center;font-size:9px;font-weight:800}.step p{font-size:10px;color:var(--muted);margin:0}.step b{color:var(--ink)}
+    .safety{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.safety .card{min-height:130px}.safety strong{color:var(--ink)}.safety .danger{border-color:#ecd3cd;background:#fffaf8}.safety .danger h3{color:var(--red)}
+    .milestones{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:16px}.milestone{background:white;border:1px solid var(--line);border-radius:15px;padding:16px}.milestone b{display:inline-grid;place-items:center;width:30px;height:30px;border-radius:10px;background:var(--green);color:var(--lime);font-size:9px;margin-bottom:10px}.milestone h3{font-size:11px;margin:0 0 6px}.milestone p{font-size:9px;color:var(--muted);margin:0}
+    .footer{margin-top:18px;padding:24px 0 34px;border-top:1px solid var(--line);display:flex;justify-content:space-between;font-size:9px;color:var(--muted)}
+    @media(max-width:980px){.grid,.arch-grid,.model,.safety{grid-template-columns:repeat(2,1fr)}.hero{grid-template-columns:1fr}.flow-grid{grid-template-columns:1fr}.milestones{grid-template-columns:repeat(2,1fr)}}
+    @media(max-width:620px){.container{padding:0 16px}.grid,.arch-grid,.model,.safety,.milestones{grid-template-columns:1fr}.hero h1{font-size:30px}}
+  </style>
+</head>
+<body>
+  <header class="topbar"><div class="container topbar-inner"><div class="brand"><div class="brand-mark">芽</div><div>芽账<small>LOCAL-FIRST BLUEPRINT</small></div></div><a class="back-link" href="01-app-prototype.html">← 返回交互原型</a></div></header>
+  <main class="container">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">JAVA ANDROID · ROOM · DIRECT AI</div>
+        <h1>账本只在本机，<br>AI 由你直接选择。</h1>
+        <p>“芽账”是纯本地 Java 原生安卓应用：Room 保存账目、攒钱目标与 Agent 历史，图片进入应用私有目录，API Key 由 Android Keystore 加密。没有自建服务端、云同步、云备份或对象存储；图片识别与 Agent 只在用户操作后直接请求所选 AI 服务商。</p>
+        <div class="hero-badges"><span class="badge">Java 17</span><span class="badge">Room 2.8.4</span><span class="badge">Keystore AES/GCM</span><span class="badge">SAF 导出 / 恢复</span><span class="badge">OpenAI 兼容直连</span><span class="badge">无后端</span></div>
+      </div>
+      <aside class="hero-note"><b>实际范围</b><p><span class="local">① 记账首页</span>（今日 / 昨日 / 空状态）<br>② 手动记账与主动选图 AI<br>③ 日期 / 类型 / 分类筛选统计<br>④ 滑动窗口 Agent 与本地工具<br>⑤ 本地 JSON / CSV 导出恢复<br>⑥ TokenDance AI 额度充值</p></aside>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>技术与运行边界</h2><p>应用数据不离开设备；网络只用于用户选择的 AI 服务商与 TokenDance 充值。</p></div><span class="section-no">01 / STACK</span></div>
+      <div class="grid">
+        <article class="card"><h3>JDK 17 + Gradle 9.4.1</h3><p>AGP 8.13.1，<code>compileSdk 36</code>、<code>targetSdk 36</code>、<code>minSdk 26</code>，统一使用 Wrapper。</p></article>
+        <article class="card"><h3>单 Activity 四页面</h3><p>记账 / 统计 / AI 代理 / 设置，使用原生 View 与 Material 组件，不依赖 XML 布局生成器。</p></article>
+        <article class="card"><h3>Room 本地数据库</h3><p><code>yazhang.db</code> 只含 entries、goals、agent_messages；金额统一为整数分。</p></article>
+        <article class="card"><h3>私有文件与 Keystore</h3><p>图片复制到应用私有目录；API Key 与充值会话使用 AES/GCM 加密，别名固定。</p></article>
+        <article class="card"><h3>SAF 文件读写</h3><p>导出与恢复使用系统文档选择器；恢复先预检新增与跳过，再确认写入。</p></article>
+        <article class="card"><h3>HttpURLConnection</h3><p>直接请求服务商 HTTPS 接口，不经过自建网关；禁止重定向，限制响应体大小。</p></article>
+        <article class="card"><h3>无云端组件</h3><p>没有 Spring Boot、MySQL、Redis、对象存储、同步游标或云端保留策略。</p></article>
+        <article class="card"><h3>可离线使用</h3><p>手动记账、统计、攒钱目标与导出恢复不依赖 AI；AI 失败不会阻塞账本。</p></article>
+      </div>
+      <div class="arch">
+        <div class="arch-head"><h3>推荐架构 · Local-first + Direct AI</h3><p>模型只返回文本 JSON；本地代码校验后最多执行一个账本动作，模型无法直接访问数据库。</p></div>
+        <div class="arch-grid">
+          <div><div class="layer-label">UI</div><div class="arch-box accent"><b>MainActivity 四页</b><span>HomeView / StatsView<br>AgentView / SettingsView</span></div><div class="arch-box"><b>输入与流程</b><span>EntryDialog · ImageEntryFlow<br>RechargeActivity · UiTask</span></div></div>
+          <div><div class="layer-label">DOMAIN</div><div class="arch-box"><b>校验与统计</b><span>Money · EntryValidator<br>StatsFilter · EntryDraft</span></div><div class="arch-box"><b>AI 协议</b><span>AiProtocol · AgentProtocol<br>ImageAiService · AgentTools</span></div></div>
+          <div><div class="layer-label">DATA</div><div class="arch-box accent"><b>Room</b><span>entries / goals<br>agent_messages</span></div><div class="arch-box"><b>本机存储</b><span>私有图片目录<br>SharedPreferences + Keystore</span></div><div class="arch-box"><b>文件</b><span>SAF JSON / CSV<br>恢复预览与去重</span></div></div>
+          <div><div class="layer-label">EXTERNAL</div><div class="arch-box"><b>AI 服务商</b><span>chat/completions<br>models 探测</span></div><div class="arch-box"><b>TokenDance</b><span>固定官方 origin<br>AI 额度充值</span></div><div class="arch-box"><b>无中转</b><span>没有自建 API / 数据库<br>没有云对象存储</span></div></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>Room 数据结构</h2><p>只有三张业务表；凭据和充值会话不进入 Room、备份或导出。</p></div><span class="section-no">02 / DATA</span></div>
+      <div class="model">
+        <article class="entity"><h3>entries</h3><ul>
+          <li><b>id</b> 自增主键</li><li><b>type</b> EXPENSE / INCOME / SAVING</li><li><b>amountFen</b> BIGINT &gt; 0</li><li><b>category</b> 分类代码</li><li><b>merchant / title / detail</b> 可空</li><li><b>occurredOn</b> ISO 日期</li><li><b>source</b> MANUAL / AI</li><li><b>status</b> POSTED</li><li><b>categoryInferred / confidence</b> AI 标记</li><li><b>imageSha</b> SHA-256 去重</li><li><b>requestKey</b> UNIQUE 防重复</li><li><b>goalId</b> 可选攒钱目标</li><li><b>createdAt / updatedAt</b></li>
+        </ul></article>
+        <article class="entity"><h3>goals</h3><ul>
+          <li><b>id</b> 自增主键</li><li><b>name</b> 最多 30 字</li><li><b>targetFen</b> 目标金额</li><li><b>targetDate</b> 目标日期</li><li><b>status</b> ACTIVE / COMPLETED</li><li><b>currentFen</b> 当前进度</li><li><b>createdAt / updatedAt</b></li>
+        </ul><div class="card" style="border:0;padding:12px 15px"><p>攒钱账目与目标更新在同一 Room 事务中完成。</p></div></article>
+        <article class="entity"><h3>agent_messages</h3><ul>
+          <li><b>id</b> 自增主键</li><li><b>sessionId</b> 会话标识</li><li><b>role</b> user / assistant</li><li><b>content</b> 净化文本</li><li><b>toolName</b> 动作类型</li><li><b>chartJson</b> 筛选后的本地图表</li><li><b>createdAt</b></li>
+        </ul><div class="card" style="border:0;padding:12px 15px"><p>完整历史保存在 Room；请求只取最近 12 条，总预算 8000 字符。</p></div></article>
+      </div>
+      <div class="card" style="margin-top:12px"><h3>非 Room 的本机状态</h3><p><code>provider_private</code> SharedPreferences 保存服务商元数据与加密后的 API Key / 充值会话；图片保存在私有目录，文件名不含用户原始名称。JSON 备份仅含账目，排除 API Key、图片、充值记录与登录凭据。</p></div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>核心业务流程</h2><p>所有 AI 流程都以“用户主动触发、本地校验、失败不写账”为前提。</p></div><span class="section-no">03 / FLOWS</span></div>
+      <div class="flow-grid">
+        <article class="flow"><h3>01 · 主动选图 AI 记账</h3><div class="sub">入口：首页“从账单图片记账（AI）”</div>
+          <div class="step"><div class="step-no">1</div><p><b>用户点击并选图</b><br>GetContent 只读取本次选择的图片，没有截图监听或相册扫描。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>私有保存与哈希</b><br>复制到私有目录，计算原图 SHA-256；相同图片在请求模型前直接拦截。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>直连服务商</b><br>读取本机加密 Key，使用 data URL 发送到已配置的 OpenAI 兼容视觉模型。</p></div>
+          <div class="step"><div class="step-no">4</div><p><b>严格解析 JSON</b><br>金额、分类、日期、商家白名单校验；非付款、多笔订单、低置信、提示注入与坏 JSON 都有明确中文说明。</p></div>
+          <div class="step"><div class="step-no">5</div><p><b>自动入账或确认</b><br>高置信单笔付款写入 entries（source=AI，保存 imageSha 与 confidence）；缺日期等进入手填表单，不静默写入。</p></div>
+        </article>
+        <article class="flow"><h3>02 · 手动记账与首页回退</h3><div class="sub">不依赖网络与 AI</div>
+          <div class="step"><div class="step-no">1</div><p><b>输入与校验</b><br>金额转整数分，最多两位小数；日期严格 ISO；攒钱必须关联进行中的目标。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>事务写入</b><br>普通账目直接写 entries；攒钱在同一事务中写账目、更新目标进度并完成目标状态。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>首页优先级</b><br>有今日支出显示今日；否则显示昨日；两者都没有时显示“今日还没有记账哦，如果有消费来记一笔吧”。</p></div>
+          <div class="step"><div class="step-no">4</div><p><b>即时刷新</b><br>首页、统计和设置数量在后台线程读取 Room，然后回主线程更新。</p></div>
+        </article>
+        <article class="flow"><h3>03 · 滑动窗口 Agent</h3><div class="sub">一次请求最多执行一个本地动作</div>
+          <div class="step"><div class="step-no">1</div><p><b>输入防护</b><br>空内容、超长、控制字符、付款 / 删除 / 导出 / SQL / 文件 / 提示注入在发送模型前拒绝。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>构建窗口</b><br>Room 保存完整历史；请求只带最近 12 条、最多 8000 字符，system 每轮重建。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>单动作 JSON</b><br>kind 仅允许 create_entry、query_statistics、get_saving_progress、clarify、final；未知动作直接拒绝。</p></div>
+          <div class="step"><div class="step-no">4</div><p><b>本地工具校验</b><br>缺金额 / 分类 / 日期必须 clarify，不写库；统计强制日期、类型、分类，明细最多 50 条。</p></div>
+          <div class="step"><div class="step-no">5</div><p><b>无越权工具</b><br>没有 SQL、文件、删除、导出、支付或任意网络工具；模型文本不能改变规则。</p></div>
+        </article>
+        <article class="flow"><h3>04 · 本地导出、备份与恢复</h3><div class="sub">SAF JSON / CSV</div>
+          <div class="step"><div class="step-no">1</div><p><b>选择导出</b><br>CreateDocument 返回 URI 后重新生成本地内容，避免使用旧快照。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>内容边界</b><br>JSON 含 schemaVersion 与账目；CSV 正确转义。API Key、图片与充值会话一律排除。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>恢复预检</b><br>OpenDocument 读取后限制 5 MB，校验字段并按 requestKey 去重，展示新增 / 跳过数量。</p></div>
+          <div class="step"><div class="step-no">4</div><p><b>确认导入</b><br>只有用户确认后才事务写入；恢复不会改写已有账目。</p></div>
+        </article>
+        <article class="flow"><h3>05 · TokenDance AI 额度充值</h3><div class="sub">充值只增加 AI 额度，永不写入账本</div>
+          <div class="step"><div class="step-no">1</div><p><b>只读 TokenDance Key</b><br>不使用其他服务商密钥；金额限制 1–100000 元，固定官方 origin 与 HTTPS。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>先保存 creating</b><br>请求前把 creating=true 加密保存到本机；网络中断时不盲目重复下单。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>再次确认后打开支付宝</b><br>只允许 alipays 或 HTTPS 支付链接；onResume 不视为付款成功。</p></div>
+          <div class="step"><div class="step-no">4</div><p><b>前台轮询</b><br>每 3 秒查询；连续失败 3 次暂停并支持手动检查。</p></div>
+          <div class="step"><div class="step-no">5</div><p><b>服务端为准</b><br>只有相同会话 ID、相同金额和 paid 才提示到账；“放弃跟踪”真正清除加密状态，并说明已付款仍可能到账。</p></div>
+        </article>
+        <article class="flow"><h3>06 · 失败与取消</h3><div class="sub">不重复写账、不显示过期结果</div>
+          <div class="step"><div class="step-no">1</div><p><b>取消请求</b><br>断开当前连接；UI 以 generation 标记丢弃过期回调。</p></div>
+          <div class="step"><div class="step-no">2</div><p><b>额度不足</b><br>显示明确“本次没有记账”，并提供进入充值页的入口；账本仍可手动使用。</p></div>
+          <div class="step"><div class="step-no">3</div><p><b>重复图片</b><br>imageSha 与 requestKey 双重去重；模型调用前即可拦截。</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><div><h2>安全与异常边界</h2><p>最高优先级是非法 AI 输入与清晰中文解释。</p></div><span class="section-no">04 / GUARDRAILS</span></div>
+      <div class="safety">
+        <article class="card"><h3>图片内容是不可信数据</h3><p>图片里的“忽略规则 / 调用工具 / 转账”等文字只作为图片内容处理。模型提示明确禁止执行；解析使用字段白名单，未知字段与坏 JSON 不入账。</p></article>
+        <article class="card"><h3>金额与重复校验</h3><p><strong>long 分</strong>替代浮点；上限 1,000,000.00 元。原图 SHA-256 与唯一 requestKey 双重防重，SQLite 唯一约束兜底。</p></article>
+        <article class="card"><h3>低置信与留空</h3><p>高置信（≥0.8）单笔付款才自动入账；低置信、缺日期、多笔订单和非付款图片都不写入。图片未提供标题与详情时保持为空，禁止编造。</p></article>
+        <article class="card"><h3>Agent 最小权限</h3><p>只有本地记账、统计、攒钱进度三个读 / 写工具；一次一个动作。缺参先追问，查询必须带日期、类型和分类，明细最多 50 条。</p></article>
+        <article class="card"><h3>凭据与备份</h3><p>API Key 使用 Android Keystore AES/GCM 加密；备份、导出、日志和 Agent 历史都不包含密钥。充值会话同样加密保存。</p></article>
+        <article class="card danger"><h3>充值不是账目</h3><p>TokenDance 充值只影响 AI 服务额度。只有服务端返回相同 ID、相同金额和 paid 才提示到账；应用不会自动拉起付款，也不会把充值写入 entries。</p></article>
+      </div>
+      <div class="milestones">
+        <article class="milestone"><b>M1</b><h3>本地账本闭环</h3><p>Room、手动记账、首页三态、攒钱目标、筛选统计、JSON / CSV 导出恢复。</p></article>
+        <article class="milestone"><b>M2</b><h3>主动选图 AI</h3><p>私有图片、哈希去重、严格协议、五类账单样本与非法输入中文提示。</p></article>
+        <article class="milestone"><b>M3</b><h3>滑动窗口 Agent</h3><p>12 条 / 8000 字符窗口、单动作路由、缺参追问、筛选图表与取消路径。</p></article>
+        <article class="milestone"><b>M4</b><h3>AI 额度充值</h3><p>固定官方 origin、加密 pending、前台轮询与服务端 paid 校验；只使用伪传输测试。</p></article>
+      </div>
+    </section>
+    <footer class="footer"><span>芽账 · 纯本地 Java 安卓记账应用 · 开发说明</span><span>两份 HTML 均为离线静态文件，无外部依赖</span></footer>
+  </main>
+</body>
+</html>

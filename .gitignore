@@ -1,0 +1,40 @@
+# Gradle and Android build outputs
+.gradle/
+build/
+/local.properties
+**/local.properties
+
+# IDE files
+.idea/
+*.iml
+
+# Local test screenshots
+/真实截图用于测试/
+
+# API keys, credentials, and signing material
+.env
+.env.*
+!.env.example
+keystore.properties
+secrets.properties
+**/secrets.xml
+**/api_keys.xml
+**/apikeys.xml
+google-services.json
+*.jks
+*.keystore
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Local development and private test material
+__pycache__/
+*.pyc
+/安卓开发环境.txt
+/app/src/androidTest/assets/test_bills/
+/docs/demo-cn/
+/docs/demo-full/
+/docs/demo/
+/docs/adb-screen.png
+/docs/images/test_input.png

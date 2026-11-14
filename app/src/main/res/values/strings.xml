@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">芽账</string>
+    <string name="home_subtitle">本地记账 · AI 助手</string>
+    <string name="tab_ledger">记账</string>
+    <string name="tab_statistics">统计</string>
+    <string name="tab_agent">AI 代理</string>
+    <string name="tab_settings">设置</string>
+    <string name="home_empty">今日还没有记账哦，如果有消费来记一笔吧</string>
+</resources>
